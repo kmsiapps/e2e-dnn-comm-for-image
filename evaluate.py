@@ -1,11 +1,11 @@
 import tensorflow as tf
 import os
+import csv
 
-from config import EPOCHS, BATCH_SIZE
-from model import E2EImageCommunicator, E2E_Channel, E2E_Decoder, E2E_Encoder
-from datasets import dataset_generator
-
-from qam_modem import qam_modem_awgn, qam_modem_rayleigh
+from config import BATCH_SIZE
+from models.model import E2EImageCommunicator, E2E_Channel, E2E_Decoder, E2E_Encoder, E2E_AutoEncoder
+from models.qam_model import QAMModem
+from utils.datasets import dataset_generator
 
 # Reference: https://www.tensorflow.org/tutorials/quickstart/advanced?hl=ko
 
@@ -16,16 +16,18 @@ def imBatchtoImage(batch_images):
     '''
     batch, h, w, c = batch_images.shape
     b = int(batch ** 0.5)
-    image = tf.reshape(batch_images, (b, b, h, w, c))
+
+    divisor = b
+    while batch % divisor != 0:
+        divisor -= 1
+    
+    image = tf.reshape(batch_images, (-1, batch//divisor, h, w, c))
     image = tf.transpose(image, [0, 2, 1, 3, 4])
-    image = tf.reshape(image, (b*h, b*w, c))
+    image = tf.reshape(image, (-1, batch//divisor*w, c))
     return image
 
-def process(image, label):
-    image = tf.cast(image/255., tf.float32)
-    return image, label
 
-test_ds = dataset_generator('./datasets/cifar10/test/')
+test_ds = dataset_generator('/dataset/CIFAR10/test/')
 
 loss_object = tf.keras.losses.MeanSquaredError()
 test_loss = tf.keras.metrics.Mean(name='test_loss')
@@ -33,42 +35,48 @@ test_loss = tf.keras.metrics.Mean(name='test_loss')
 normalization_layer = tf.keras.layers.experimental.preprocessing.Rescaling(1./255)
 test_ds = test_ds.map(lambda x, y: (normalization_layer(x), y))
 
-model = E2EImageCommunicator(l=4)
+model = E2EImageCommunicator(filters=[32, 64, 128])
 model.build(input_shape=(1,32,32,3))
 model.summary()
 
-'''
+################## CONFIG ####################
+best_model = 'epoch_302.ckpt'
+QAM_ORDER = 256
+##############################################
+
 for channelname in ['Rayleigh', 'AWGN']:
+    f = open(f'./results/{channelname.lower()}_results.csv', 'w', newline='')
+    writer = csv.writer(f)
+    writer.writerow(['SNR', 'PropSSIM', 'PropMSE', 'QAMSSIM', 'QAMMSE'])
+
     if not os.path.isdir('./results'):
         os.mkdir('./results')
     
     if not os.path.isdir(f'./results/{channelname}/'):
         os.mkdir(f'./results/{channelname}/')
 
-    qam_modulation = qam_modem_rayleigh if channelname == 'Rayleigh' else qam_modem_awgn
-
     for EVAL_SNRDB in range(0, 45, 5):
-        model = E2EImageCommunicator(l=4, snrdB=EVAL_SNRDB, channel='Rayleigh')
-        # model.load_weights('./best_model/best_snr30')
-        model.load_weights('./best_model/best_snr40')
-        # model.load_weights('epoch_1.ckpt')
+        qam_modem = QAMModem(snrdB=EVAL_SNRDB, order=QAM_ORDER, channel=channelname)
+        model = E2EImageCommunicator(filters=[32, 64, 128], snrdB=EVAL_SNRDB, channel=channelname)
+        model.load_weights(best_model)
 
         i = 0
         ssim_props = 0; ssim_qams = 0
         mse_props = 0; mse_qams = 0
+        psnr_props = 0; psnr_qams = 0
         for images, _ in test_ds:
-            prop_results = model(images)
-
-            # 256-QAM
-            flat_images = tf.cast(tf.reshape(images, (-1)) * 255, 'uint8').numpy().tolist()
-            demod_images = list(qam_modulation(x, 8, EVAL_SNRDB) for x in flat_images)
-            qam_results = tf.reshape(tf.convert_to_tensor(demod_images, dtype=tf.float32) / 255, tf.shape(images))
-
+            int16_images = tf.cast(images * 255, tf.int16)
+            qam_results = tf.cast(qam_modem(int16_images), tf.float32) / 255
+            prop_results = model(images, training=False)
+            
             ssim_props += tf.reduce_sum(tf.image.ssim(images, prop_results, max_val=1.0))
             ssim_qams += tf.reduce_sum(tf.image.ssim(images, qam_results, max_val=1.0))
 
-            mse_props += tf.reduce_sum(tf.math.sqrt((images - prop_results) ** 2))
-            mse_qams += tf.reduce_sum(tf.math.sqrt((images - qam_results) ** 2))
+            mse_props += tf.reduce_mean(tf.math.sqrt((images - prop_results) ** 2))
+            mse_qams += tf.reduce_mean(tf.math.sqrt((images - qam_results) ** 2))
+
+            psnr_props += tf.reduce_sum(tf.image.psnr(images, prop_results, max_val=1.0))
+            psnr_qams += tf.reduce_sum(tf.image.psnr(images, qam_results, max_val=1.0))
             
             i += 1
 
@@ -83,17 +91,23 @@ for channelname in ['Rayleigh', 'AWGN']:
         ssim_qams /= total_images
         mse_props /= total_images
         mse_qams /= total_images
+        psnr_props /= total_images
+        psnr_qams /= total_images
         
         print(f'Channel: {channelname} / SNR: {EVAL_SNRDB}dB =======================================')
         print(f'SSIM: (Proposed){ssim_props:.6f} vs. (QAM){ssim_qams:.6f}')
-        print(f'MSE:  (Proposed){mse_props:.6f} vs. (QAM){mse_qams:.6f}')    
+        print(f'MSE:  (Proposed){mse_props:.6f} vs. (QAM){mse_qams:.6f}')
+        print(f'PSNR:  (Proposed){psnr_props:.6f} vs. (QAM){psnr_qams:.6f}')
+
+        writer.writerow([EVAL_SNRDB, float(ssim_props), float(mse_props), float(ssim_qams), float(mse_qams)])
+
 
     # Layer-wise image
     images, _ = next(iter(test_ds))
 
-    for model_subclass in [E2EImageCommunicator, E2E_Encoder, E2E_Channel, E2E_Decoder]:
-        model = model_subclass(l=4, snrdB=10, channel='Rayleigh')
-        model.load_weights('./best_model/best_snr40')
+    for model_subclass in [E2EImageCommunicator, E2E_Encoder, E2E_Channel, E2E_Decoder, E2E_AutoEncoder]:
+        model = model_subclass(filters=[32, 64, 128], snrdB=10, channel='Rayleigh')
+        model.load_weights(best_model)
         result = model(images[:1, :, :, :])
         output = result
         if model_subclass.__name__ != 'E2EImageCommunicator':
@@ -110,4 +124,3 @@ for channelname in ['Rayleigh', 'AWGN']:
 
     tf.keras.utils.save_img(f'./results/{channelname}/E2E_before_SNR10.png',
                             images[0, :, :, :])
-'''
