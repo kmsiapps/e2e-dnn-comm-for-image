@@ -61,7 +61,7 @@ class QAMDemodulator(tf.keras.layers.Layer):
         avg_power = tf.math.sqrt((self.order-1)/3*2)
 
         # QAM detection
-        yhat = tf.math.floor(inputs * avg_power / 2) * 2 + 1
+        yhat = tf.cast(tf.math.floor(inputs * avg_power / 2) * 2 + 1, tf.int32)
         max_val = 2 * 2 ** (self.n_bit // 2) - 1 - self.n_bit
         min_val = 1 - self.n_bit
         yhat = tf.math.minimum(max_val, tf.math.maximum(yhat, min_val))

@@ -7,17 +7,20 @@ class ResBlock(tf.keras.layers.Layer):
         super().__init__()
         self.bottleneck = is_bottleneck
         self.stride = stride
+        henorm = tf.keras.initializers.HeNormal()
 
         self.conv1 = tf.keras.layers.Conv2D(filters = filter_size,
                                             kernel_size = (1, 1),
                                             strides = 1,
-                                            padding="same")
+                                            padding="same",
+                                            kernel_initializer=henorm)
         self.bn1 = tf.keras.layers.BatchNormalization()
 
         self.conv2 = tf.keras.layers.Conv2D(filters = filter_size,
                                             kernel_size = (3, 3),
                                             strides = stride,
-                                            padding="same")
+                                            padding="same",
+                                            kernel_initializer=henorm)
         self.bn2 = tf.keras.layers.BatchNormalization()
 
         if self.bottleneck:
@@ -25,7 +28,8 @@ class ResBlock(tf.keras.layers.Layer):
             self.conv3 = tf.keras.layers.Conv2D(filters = filter_size * 4,
                                                 kernel_size = (1, 1),
                                                 strides = 1,
-                                                padding="same")
+                                                padding="same",
+                                                kernel_initializer=henorm)
             self.bn3 = tf.keras.layers.BatchNormalization()
         else:
             self.relu = lambda x: x
@@ -37,7 +41,8 @@ class ResBlock(tf.keras.layers.Layer):
         self.projection.add(tf.keras.layers.Conv2D(filters = ds_filter_size,
                                                     kernel_size = (1, 1),
                                                     strides = stride,
-                                                    padding="same"))
+                                                    padding="same",
+                                                    kernel_initializer=henorm))
         self.projection.add(tf.keras.layers.BatchNormalization())
 
 

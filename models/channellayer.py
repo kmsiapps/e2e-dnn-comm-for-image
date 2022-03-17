@@ -9,7 +9,6 @@ class RayleighChannel(tf.keras.layers.Layer):
 
     def call(self, inputs):
         # power normalization
-        # suppose uniform distribution between 0 and 1
         normalizer = tf.math.sqrt(tf.math.reduce_mean(inputs ** 2))
         x = inputs / normalizer
         

@@ -1,5 +1,4 @@
 import tensorflow as tf
-import tensorflow_addons as tfa
 
 from utils.qam_modem_tf import QAMModulator, QAMDemodulator
 from models.channellayer import RayleighChannel, AWGNChannel

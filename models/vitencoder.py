@@ -22,7 +22,7 @@ class MLP(tf.keras.layers.Layer):
 
 
 class ViTEncoder(tf.keras.layers.Layer):
-    def __init__(self, num_heads=4, head_size=16, mlp_dim=[64, 128, 32]):
+    def __init__(self, num_heads=16, head_size=4, mlp_dim=[64, 128, 32]):
         super().__init__()
 
         self.ln1 = tf.keras.layers.LayerNormalization()

@@ -4,6 +4,7 @@ import csv
 
 from config import BATCH_SIZE
 from models.model import E2EImageCommunicator, E2E_Channel, E2E_Decoder, E2E_Encoder, E2E_AutoEncoder
+from models.jscc_model import JSCC_Communicator
 from models.qam_model import QAMModem
 from utils.datasets import dataset_generator
 
@@ -27,7 +28,7 @@ def imBatchtoImage(batch_images):
     return image
 
 
-test_ds = dataset_generator('/dataset/CIFAR10/test/')
+test_ds = dataset_generator('/dataset/CIFAR100/test/')
 
 loss_object = tf.keras.losses.MeanSquaredError()
 test_loss = tf.keras.metrics.Mean(name='test_loss')
@@ -35,12 +36,12 @@ test_loss = tf.keras.metrics.Mean(name='test_loss')
 normalization_layer = tf.keras.layers.experimental.preprocessing.Rescaling(1./255)
 test_ds = test_ds.map(lambda x, y: (normalization_layer(x), y))
 
-model = E2EImageCommunicator(filters=[32, 64, 128])
+model = E2EImageCommunicator()
 model.build(input_shape=(1,32,32,3))
 model.summary()
 
 ################## CONFIG ####################
-best_model = 'epoch_302.ckpt'
+best_model = './model_checkpoints/ae_non_selfattention_mae_25dB.ckpt'
 QAM_ORDER = 256
 ##############################################
 
@@ -57,7 +58,7 @@ for channelname in ['Rayleigh', 'AWGN']:
 
     for EVAL_SNRDB in range(0, 45, 5):
         qam_modem = QAMModem(snrdB=EVAL_SNRDB, order=QAM_ORDER, channel=channelname)
-        model = E2EImageCommunicator(filters=[32, 64, 128], snrdB=EVAL_SNRDB, channel=channelname)
+        model = model = E2EImageCommunicator(snrdB=EVAL_SNRDB, channel=channelname)
         model.load_weights(best_model)
 
         i = 0
@@ -72,19 +73,22 @@ for channelname in ['Rayleigh', 'AWGN']:
             ssim_props += tf.reduce_sum(tf.image.ssim(images, prop_results, max_val=1.0))
             ssim_qams += tf.reduce_sum(tf.image.ssim(images, qam_results, max_val=1.0))
 
-            mse_props += tf.reduce_mean(tf.math.sqrt((images - prop_results) ** 2))
-            mse_qams += tf.reduce_mean(tf.math.sqrt((images - qam_results) ** 2))
+            mse_props += tf.reduce_mean((images - prop_results) ** 2) * BATCH_SIZE
+            mse_qams += tf.reduce_mean((images - qam_results) ** 2) * BATCH_SIZE
 
             psnr_props += tf.reduce_sum(tf.image.psnr(images, prop_results, max_val=1.0))
             psnr_qams += tf.reduce_sum(tf.image.psnr(images, qam_results, max_val=1.0))
             
-            i += 1
-
-            if i == 10:
+            if i == 0:
                 tf.keras.utils.save_img(f'./results/{channelname}/original_SNR{EVAL_SNRDB}.png', imBatchtoImage(images))
                 tf.keras.utils.save_img(f'./results/{channelname}/proposed_SNR{EVAL_SNRDB}.png', imBatchtoImage(prop_results))
                 tf.keras.utils.save_img(f'./results/{channelname}/256qam_SNR{EVAL_SNRDB}.png', imBatchtoImage(qam_results))
+            
+            if i == 9:
                 break
+
+            i += 1
+
 
         total_images = i * BATCH_SIZE
         ssim_props /= total_images
@@ -100,7 +104,6 @@ for channelname in ['Rayleigh', 'AWGN']:
         print(f'PSNR:  (Proposed){psnr_props:.6f} vs. (QAM){psnr_qams:.6f}')
 
         writer.writerow([EVAL_SNRDB, float(ssim_props), float(mse_props), float(ssim_qams), float(mse_qams)])
-
 
     # Layer-wise image
     images, _ = next(iter(test_ds))
