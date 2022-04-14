@@ -13,13 +13,13 @@ class QAMModulator(tf.keras.layers.Layer):
         output dtype: float
         '''
         super().__init__()
-        assert(order < MAX_ORDER, f"Order should not be greater than {MAX_ORDER}")
+        assert order <= MAX_ORDER, f"Order should not be greater than {MAX_ORDER}"
         self.order = order
         self.n_bit = int(math.log2(self.order))
 
     def call(self, inputs):
-        assert(inputs.dtype in [tf.int8, tf.int16, tf.int32, tf.int64],
-               "input tensor dtype should be int")
+        assert inputs.dtype in [tf.int8, tf.int16, tf.int32, tf.int64], \
+               "input tensor dtype should be int"
         avg_power = math.sqrt((self.order-1)/3*2)
 
         # bit split
@@ -36,7 +36,7 @@ class QAMModulator(tf.keras.layers.Layer):
 
         # center to zero and power normalization
         output = tf.cast(output, tf.float32)
-        output = (2 * output - 1 - self.n_bit) / avg_power
+        output = (2 * output - 1 - self.order**0.5) / avg_power
 
         return output
 
@@ -62,12 +62,12 @@ class QAMDemodulator(tf.keras.layers.Layer):
 
         # QAM detection
         yhat = tf.cast(tf.math.floor(inputs * avg_power / 2) * 2 + 1, tf.int32)
-        max_val = 2 * 2 ** (self.n_bit // 2) - 1 - self.n_bit
-        min_val = 1 - self.n_bit
+        max_val = 2 * 2 ** (self.n_bit // 2) - 1 - int(self.order**0.5)
+        min_val = 1 - int(self.order**0.5)
         yhat = tf.math.minimum(max_val, tf.math.maximum(yhat, min_val))
 
         # undo zero-centering
-        yhat = (yhat + self.n_bit + 1) // 2 - 1
+        yhat = (yhat + int(self.order**0.5) + 1) // 2 - 1
 
         yhat = tf.cast(yhat, tf.int16)
 
