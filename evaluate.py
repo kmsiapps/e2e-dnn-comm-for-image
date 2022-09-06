@@ -84,10 +84,9 @@ for channelname in ['Rayleigh', 'AWGN']:
                 tf.keras.utils.save_img(f'./results/{channelname}/proposed_SNR{EVAL_SNRDB}.png', imBatchtoImage(prop_results))
                 tf.keras.utils.save_img(f'./results/{channelname}/256qam_SNR{EVAL_SNRDB}.png', imBatchtoImage(qam_results))
             
-            if i == 9:
-                break
-
             i += 1
+            if i == 10:
+                break
 
 
         total_images = i * BATCH_SIZE
