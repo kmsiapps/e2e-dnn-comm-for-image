@@ -23,10 +23,13 @@ There is currently no command line arguments; please edit the codes before you r
 ## Reference
 
 ```
-@article{yoo2022real,
-  title={Real-Time Semantic Communications with a Vision Transformer},
+@INPROCEEDINGS{yoo2022real,
   author={Yoo, Hanju and Jung, Taehun and Dai, Linglong and Kim, Songkuk and Chae, Chan-Byoung},
-  journal={arXiv preprint arXiv:2205.03886},
-  year={2022}
-}
+  booktitle={2022 IEEE International Conference on Communications Workshops (ICC Workshops)}, 
+  title={Demo: Real-Time Semantic Communications with a Vision Transformer}, 
+  year={2022},
+  volume={},
+  number={},
+  pages={1-2},
+  doi={10.1109/ICCWorkshops53468.2022.9914635}}
 ```
