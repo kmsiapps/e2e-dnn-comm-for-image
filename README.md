@@ -2,6 +2,8 @@
 
 Code repository for ICC 2022 demo proposal "Real-Time Semantic Communications with a Vision Transformer".
 
+You may want to see [On the Role of ViT and CNN in Semantic Communications: Analysis and Prototype Validation](https://github.com/kmsiapps/Semantic-Communications-with-a-Vision-Transformer), a successor of this project.
+
 ## Requirements
 `tensorflow`
 `tensorflow_addons`
